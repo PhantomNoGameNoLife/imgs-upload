@@ -334,23 +334,39 @@
     function updateFileList() {
       const files = folderUploadInput.files;
       fileList.innerHTML = '';
-      if (files.length > 0) {
+
+      // Define valid image extensions
+      const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp)$/i;
+
+      // Filter only image files in the root folder
+      const imageFiles = Array.from(files).filter(file => {
+        // Check if file is an image
+        const isImage = imageExtensions.test(file.name);
+        // Check if file is in the root folder (no subfolders)
+        const isRootFile = file.webkitRelativePath.split('/').length === 2;
+        return isImage && isRootFile;
+      });
+
+      if (imageFiles.length > 0) {
         fileList.innerHTML = '<ul class="list-group">';
-        for (let i = 0; i < Math.min(files.length, 10); i++) {
+        for (let i = 0; i < Math.min(imageFiles.length, 10); i++) {
           fileList.innerHTML += `
-            <li class="list-group-item">
-              <i class="fas fa-image me-2"></i>${files[i].name}
-            </li>`;
+        <li class="list-group-item">
+          <i class="fas fa-image me-2"></i>${imageFiles[i].name}
+        </li>`;
         }
-        if (files.length > 10) {
-          fileList.innerHTML += `<li class="list-group-item">و ${files.length - 10} صور أخرى...</li>`;
+        if (imageFiles.length > 10) {
+          fileList.innerHTML += `<li class="list-group-item">و ${imageFiles.length - 10} صور أخرى...</li>`;
         }
         fileList.innerHTML += '</ul>';
         folderUploadArea.querySelector('.file-upload-text').textContent = 'تم اختيار المجلد بنجاح، جاري الرفع...';
-        uploadFolder(); // Start upload automatically
+        uploadFolder(imageFiles); // Pass filtered image files to upload
       } else {
         fileList.innerHTML = '';
         folderUploadArea.querySelector('.file-upload-text').textContent = 'انقر لاختيار المجلد أو اسحب وأسقطه هنا';
+        logBox.classList.remove('d-none');
+        logBox.classList.add('alert-warning');
+        logBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> لم يتم العثور على صور في المجلد الرئيسي.';
       }
     }
 
@@ -475,13 +491,18 @@
     }
 
     // Upload Folder
-    async function uploadFolder() {
-      const files = folderUploadInput.files;
+    async function uploadFolder(imageFiles) {
+      // If no image files are provided, use folderUploadInput.files (fallback for unchanged calls)
+      const files = imageFiles || Array.from(folderUploadInput.files).filter(file => {
+        const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp)$/i;
+        const isRootFile = file.webkitRelativePath.split('/').length === 2;
+        return imageExtensions.test(file.name) && isRootFile;
+      });
 
       if (files.length === 0) {
         logBox.classList.remove('d-none');
         logBox.classList.add('alert-danger');
-        logBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> يرجى اختيار مجلد.';
+        logBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> يرجى اختيار مجلد يحتوي على صور.';
         return;
       }
 
@@ -492,7 +513,7 @@
       logBox.classList.remove('d-none');
       logBox.classList.remove('alert-danger');
       logBox.classList.add('alert-info');
-      logBox.innerHTML = '<i class="fas fa-upload"></i> جاري تحضير الملفات للرفع...';
+      logBox.innerHTML = '<i class="fas fa-upload"></i> جاري تحضير الصور للرفع...';
 
       try {
         for (let i = 0; i < files.length; i++) {
@@ -523,7 +544,7 @@
         projectNameBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح! اسم المشروع الخاص بك: <strong id="projectId">${project}</strong><i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${project}', 'projectNameBox')"></i>. استخدم هذا الاسم لجلب الصور.`;
         logBox.classList.remove('alert-info');
         logBox.classList.add('alert-success');
-        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم جلب الصور بنجاح!`;
+        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح!`;
         await loadImages(project);
       } catch (error) {
         logBox.classList.remove('alert-info');
