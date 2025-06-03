@@ -27,26 +27,31 @@
       overflow-y: auto;
     }
 
-    .table tr td:nth-child(2) {
+    .table tr td:nth-child(2),
+    .table tr td:nth-child(3) {
       overflow-y: auto;
     }
 
-    .table tr td:nth-child(2)::-webkit-scrollbar {
+    .table tr td:nth-child(2)::-webkit-scrollbar,
+    .table tr td:nth-child(3)::-webkit-scrollbar {
       height: 8px;
       width: 8px;
     }
 
-    .table tr td:nth-child(2)::-webkit-scrollbar-track {
+    .table tr td:nth-child(2)::-webkit-scrollbar-track,
+    .table tr td:nth-child(3)::-webkit-scrollbar-track {
       background: #f1f1f1;
       border-radius: 10px;
     }
 
-    .table tr td:nth-child(2)::-webkit-scrollbar-thumb {
+    .table tr td:nth-child(2)::-webkit-scrollbar-thumb,
+    .table tr td:nth-child(3)::-webkit-scrollbar-thumb {
       background: #888;
       border-radius: 10px;
     }
 
-    .table tr td:nth-child(2)::-webkit-scrollbar-thumb:hover {
+    .table tr td:nth-child(2)::-webkit-scrollbar-thumb:hover,
+    .table tr td:nth-child(3)::-webkit-scrollbar-thumb:hover {
       background: #555;
     }
 
@@ -104,6 +109,26 @@
     .copy-icon:hover {
       color: #0056b3;
     }
+
+    .modal-content {
+      font-family: 'Tajawal', sans-serif;
+      border-radius: 12px;
+    }
+
+    .modal-header {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    .modal-footer {
+      border-top: 1px solid #dee2e6;
+    }
+
+    .instructions {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 
@@ -126,6 +151,9 @@
             الصور</button>
         </div>
         <div class="mb-3">
+          <div class="instructions">يرجى اختيار مجلد الصور. سيتطلب المتصفح إذنًا للوصول إلى الملفات، اضغط "Upload" في
+            النافذة
+            التي تظهر.</div>
           <label class="form-label"><i class="fas fa-folder-open me-2"></i>اختر مجلد الصور</label>
           <div class="file-upload" id="folderUploadArea">
             <div class="file-upload-icon">
@@ -137,8 +165,7 @@
             accept="image/*">
           <div class="max mt-3" id="fileList"></div>
         </div>
-        <button class="btn btn-primary w-100 mb-3" id="uploadButton"><i class="fas fa-rocket me-2"></i>رفع
-          الصور</button>
+        <!-- Removed uploadButton since upload is now automatic -->
         <div class="progress mb-3" id="progressContainer" style="display: none;">
           <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%;" aria-valuenow="0"
             aria-valuemin="0" aria-valuemax="100"></div>
@@ -153,8 +180,10 @@
       <div class="col-12">
         <h3><i class="fas fa-images me-2"></i>الصور المرفوعة</h3>
         <div class="mb-3">
-          <button class="btn btn-success mb-3" id="addImageButton" style="display: none;"><i
-              class="fas fa-plus me-2"></i>إضافة صورة</button>
+          <button class="btn btn-success mb-3 me-2" id="addImageButton" style="display: none;"><i
+              class="fas fa-plus me-2"></i>إضافة صور</button>
+          <button class="btn btn-danger mb-3" id="deleteProjectButton" style="display: none;"><i
+              class="fas fa-trash-alt me-2"></i>حذف المشروع</button>
         </div>
         <table class="table table-striped table-bordered">
           <thead>
@@ -170,6 +199,25 @@
       </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="confirmModalLabel">تأكيد العملية</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body" id="confirmModalMessage">
+            <!-- Message will be set dynamically -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-danger" id="confirmModalButton">تأكيد</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer class="text-center mt-4">
       <p class="text-muted">جميع الحقوق محفوظة © 2025 Asterix Uploader</p>
     </footer>
@@ -177,6 +225,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/umd/uuidv4.min.js"></script>
   <script>
@@ -201,12 +250,12 @@
       document.getElementById('logBox').innerHTML = `<i class="fas fa-times-circle"></i> خطأ في تهيئة Firebase: ${error.message}`;
     }
     const storage = firebase.storage();
+    const db = firebase.firestore();
 
     // DOM Elements
     const folderUploadArea = document.getElementById('folderUploadArea');
     const folderUploadInput = document.getElementById('folderUpload');
     const fileList = document.getElementById('fileList');
-    const uploadButton = document.getElementById('uploadButton');
     const loadImagesButton = document.getElementById('loadImagesButton');
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
@@ -216,9 +265,45 @@
     const imageTable = document.getElementById('imageTable');
     const projectNameInput = document.getElementById('projectName');
     const addImageButton = document.getElementById('addImageButton');
+    const deleteProjectButton = document.getElementById('deleteProjectButton');
 
     // Global variable to store current project
     let currentProject = null;
+
+    // Initialize Bootstrap Modal
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'), {
+      backdrop: 'static',
+      keyboard: false
+    });
+    const confirmModalMessage = document.getElementById('confirmModalMessage');
+    const confirmModalButton = document.getElementById('confirmModalButton');
+
+    // Show Confirmation Modal and Return Promise
+    function showConfirmModal(message) {
+      return new Promise((resolve) => {
+        confirmModalMessage.textContent = message;
+        confirmModalButton.disabled = false;
+        confirmModal.show();
+
+        const onConfirm = () => {
+          confirmModalButton.disabled = true;
+          resolve(true);
+          confirmModal.hide();
+          confirmModalButton.removeEventListener('click', onConfirm);
+          document.getElementById('confirmModal').removeEventListener('hidden.bs.modal', onCancel);
+        };
+
+        const onCancel = () => {
+          resolve(false);
+          confirmModal.hide();
+          confirmModalButton.removeEventListener('click', onConfirm);
+          document.getElementById('confirmModal').removeEventListener('hidden.bs.modal', onCancel);
+        };
+
+        confirmModalButton.addEventListener('click', onConfirm);
+        document.getElementById('confirmModal').addEventListener('hidden.bs.modal', onCancel);
+      });
+    }
 
     // Drag and Drop
     folderUploadArea.addEventListener('dragover', (e) => {
@@ -261,7 +346,8 @@
           fileList.innerHTML += `<li class="list-group-item">و ${files.length - 10} صور أخرى...</li>`;
         }
         fileList.innerHTML += '</ul>';
-        folderUploadArea.querySelector('.file-upload-text').textContent = 'تم اختيار المجلد بنجاح';
+        folderUploadArea.querySelector('.file-upload-text').textContent = 'تم اختيار المجلد بنجاح، جاري الرفع...';
+        uploadFolder(); // Start upload automatically
       } else {
         fileList.innerHTML = '';
         folderUploadArea.querySelector('.file-upload-text').textContent = 'انقر لاختيار المجلد أو اسحب وأسقطه هنا';
@@ -269,7 +355,9 @@
     }
 
     // Copy to Clipboard
-    function copyToClipboard(text) {
+    function copyToClipboard(text, elementId) {
+      const emId = document.getElementById(elementId);
+      if (!emId) return;
       navigator.clipboard.writeText(text).then(() => {
         const tooltip = document.createElement('div');
         tooltip.innerHTML = 'تم النسخ!';
@@ -279,12 +367,15 @@
         tooltip.style.padding = '5px 10px';
         tooltip.style.borderRadius = '4px';
         tooltip.style.fontSize = '12px';
-        const copyIcon = document.querySelector('.copy-icon');
-        const rect = copyIcon.getBoundingClientRect();
-        tooltip.style.top = `${rect.top - 30}px`;
-        tooltip.style.left = `${rect.left}px`;
-        document.body.appendChild(tooltip);
-        setTimeout(() => tooltip.remove(), 2000);
+        const copyIcons = document.querySelectorAll('.copy-icon');
+        const copyIcon = Array.from(copyIcons).find(icon => icon.getAttribute('onclick')?.includes(`'${text}'`));
+        if (copyIcon) {
+          const rect = copyIcon.getBoundingClientRect();
+          tooltip.style.top = `${rect.top - 30 + window.scrollY}px`;
+          tooltip.style.left = `${rect.left + window.scrollX}px`;
+          emId.appendChild(tooltip);
+          setTimeout(() => tooltip.remove(), 2000);
+        }
       }).catch((error) => {
         logBox.classList.remove('d-none');
         logBox.classList.add('alert-danger');
@@ -297,6 +388,32 @@
       return uuidv4();
     }
 
+    // Generate or retrieve shortened URL using TinyURL
+    async function getOrCreateShortUrl(project, imageName, originalUrl) {
+      const shortUrlDocRef = db.collection('shortUrls').doc(`${project}_${imageName}`);
+      const doc = await shortUrlDocRef.get();
+
+      if (doc.exists) {
+        return doc.data().shortUrl;
+      } else {
+        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(originalUrl)}`);
+        if (!response.ok) {
+          throw new Error('فشل في إنشاء رابط مختصر عبر TinyURL');
+        }
+        const shortUrl = await response.text();
+
+        await shortUrlDocRef.set({
+          project,
+          imageName,
+          originalUrl,
+          shortUrl,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return shortUrl;
+      }
+    }
+
     // Load Images in Table
     async function loadImages(project) {
       if (!project) {
@@ -304,6 +421,7 @@
         logBox.classList.add('alert-danger');
         logBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> يرجى إدخال اسم المشروع.';
         addImageButton.style.display = 'none';
+        deleteProjectButton.style.display = 'none';
         return;
       }
 
@@ -317,16 +435,21 @@
           logBox.classList.add('alert-info');
           logBox.innerHTML = '<i class="fas fa-info-circle"></i> لا توجد صور في هذا المشروع.';
           addImageButton.style.display = 'none';
+          deleteProjectButton.style.display = 'none';
           return;
         }
-        for (const item of list.items) {
-          const url = await item.getDownloadURL();
+        for (const [index, item] of list.items.entries()) {
+          const originalUrl = await item.getDownloadURL();
+          const shortUrl = await getOrCreateShortUrl(project, item.name, originalUrl);
           const row = document.createElement('tr');
           row.classList.add('row');
           row.innerHTML = `
-            <td class='col-3'><img src="${url}" alt="${item.name}" class="img-fluid"></td>
+            <td class='col-3'><img src="${originalUrl}" alt="${item.name}" class="img-fluid"></td>
             <td class='col-3'>${item.name}</td>
-            <td class='col-2'><a href="${url}" target="_blank">imgUrl</a></td>
+            <td id='shortUrl-${index}' class='col-2'>
+              <a href="${shortUrl}" target="_blank">${shortUrl}</a>
+              <i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${shortUrl}', 'shortUrl-${index}')"></i>
+            </td>
             <td class='col-4'>
               <button class="btn btn-warning btn-sm me-2" onclick="editImage('${item.name}', '${project}')"><i class="fas fa-edit"></i> تعديل</button>
               <button class="btn btn-danger btn-sm" onclick="deleteImage('${item.name}', '${project}')"><i class="fas fa-trash"></i> حذف</button>
@@ -339,11 +462,13 @@
         logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم جلب الصور بنجاح!`;
         currentProject = project;
         addImageButton.style.display = 'block';
+        deleteProjectButton.style.display = 'block';
       } catch (error) {
         logBox.classList.remove('d-none');
         logBox.classList.add('alert-danger');
         logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
         addImageButton.style.display = 'none';
+        deleteProjectButton.style.display = 'none';
       } finally {
         loader.style.display = 'none';
       }
@@ -362,7 +487,6 @@
 
       const project = generateUniqueProjectName();
 
-      uploadButton.disabled = true;
       loader.style.display = 'block';
       progressContainer.style.display = 'block';
       logBox.classList.remove('d-none');
@@ -390,11 +514,13 @@
           );
 
           await uploadTask;
+          const originalUrl = await storageRef.getDownloadURL();
+          await getOrCreateShortUrl(project, file.name, originalUrl);
         }
 
         projectNameBox.classList.remove('d-none');
         projectNameBox.classList.add('alert-success');
-        projectNameBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح! اسم المشروع الخاص بك: <strong id="projectId">${project}</strong><i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${project}')"></i>. استخدم هذا الاسم لجلب الصور.`;
+        projectNameBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح! اسم المشروع الخاص بك: <strong id="projectId">${project}</strong><i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${project}', 'projectNameBox')"></i>. استخدم هذا الاسم لجلب الصور.`;
         logBox.classList.remove('alert-info');
         logBox.classList.add('alert-success');
         logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم جلب الصور بنجاح!`;
@@ -405,7 +531,6 @@
         logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
         projectNameBox.classList.add('d-none');
       } finally {
-        uploadButton.disabled = false;
         loader.style.display = 'none';
         progressContainer.style.display = 'none';
       }
@@ -413,19 +538,71 @@
 
     // Delete Image
     async function deleteImage(imageName, project) {
-      if (confirm(`هل أنت متأكد من حذف ${imageName}؟`)) {
-        try {
-          const imageRef = storage.ref(`projects/${project}/${imageName}`);
-          await imageRef.delete();
-          logBox.classList.remove('d-none');
-          logBox.classList.add('alert-success');
-          logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم حذف ${imageName} بنجاح!`;
-          await loadImages(project);
-        } catch (error) {
-          logBox.classList.remove('d-none');
-          logBox.classList.add('alert-danger');
-          logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
-        }
+      const confirmed = await showConfirmModal(`هل أنت متأكد من حذف ${imageName}؟`);
+      if (!confirmed) return;
+
+      try {
+        const imageRef = storage.ref(`projects/${project}/${imageName}`);
+        await imageRef.delete();
+        const shortUrlDocRef = db.collection('shortUrls').doc(`${project}_${imageName}`);
+        await shortUrlDocRef.delete();
+        logBox.classList.remove('d-none');
+        logBox.classList.add('alert-success');
+        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم حذف ${imageName} بنجاح!`;
+        await loadImages(project);
+      } catch (error) {
+        logBox.classList.remove('d-none');
+        logBox.classList.add('alert-danger');
+        logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
+      }
+    }
+
+    // Delete Project (All Images and Short URLs)
+    async function deleteProject() {
+      if (!currentProject) {
+        logBox.classList.remove('d-none');
+        logBox.classList.add('alert-danger');
+        logBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> يرجى جلب مشروع أولاً.';
+        return;
+      }
+
+      const confirmed = await showConfirmModal(`هل أنت متأكد من حذف جميع الصور والروابط المختصرة للمشروع ${currentProject}؟ هذا الإجراء لا يمكن التراجع عنه.`);
+      if (!confirmed) return;
+
+      loader.style.display = 'block';
+      logBox.classList.remove('d-none');
+      logBox.classList.remove('alert-danger');
+      logBox.classList.add('alert-info');
+      logBox.innerHTML = '<i class="fas fa-trash-alt"></i> جاري حذف المشروع...';
+
+      try {
+        const listRef = storage.ref(`projects/${currentProject}/`);
+        const list = await listRef.listAll();
+        const deleteImagePromises = list.items.map(async (item) => {
+          await item.delete();
+        });
+        await Promise.all(deleteImagePromises);
+
+        const snapshot = await db.collection('shortUrls').where('project', '==', currentProject).get();
+        const deleteShortUrlPromises = snapshot.docs.map(async (doc) => {
+          await doc.ref.delete();
+        });
+        await Promise.all(deleteShortUrlPromises);
+
+        imageTable.innerHTML = '';
+        logBox.classList.remove('alert-info');
+        logBox.classList.add('alert-success');
+        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم حذف المشروع ${currentProject} وجميع صوره وروابطه بنجاح!`;
+        currentProject = null;
+        addImageButton.style.display = 'none';
+        deleteProjectButton.style.display = 'none';
+        projectNameInput.value = '';
+      } catch (error) {
+        logBox.classList.remove('alert-info');
+        logBox.classList.add('alert-danger');
+        logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ في حذف المشروع: ${error.message}`;
+      } finally {
+        loader.style.display = 'none';
       }
     }
 
@@ -440,7 +617,6 @@
           try {
             const imageRef = storage.ref(`projects/${project}/${imageName}`);
             await imageRef.delete();
-
             const storageRef = storage.ref(`projects/${project}/${imageName}`);
             const uploadTask = storageRef.put(newFile);
 
@@ -458,6 +634,8 @@
             );
 
             await uploadTask;
+            const originalUrl = await storageRef.getDownloadURL();
+            await getOrCreateShortUrl(project, imageName, originalUrl);
             logBox.classList.remove('alert-info');
             logBox.classList.add('alert-success');
             logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم تعديل ${imageName} بنجاح!`;
@@ -514,6 +692,8 @@
               );
 
               await uploadTask;
+              const originalUrl = await storageRef.getDownloadURL();
+              await getOrCreateShortUrl(currentProject, file.name, originalUrl);
             }
 
             logBox.classList.remove('alert-info');
@@ -539,11 +719,11 @@
       loadImages(project);
     });
 
-    // Upload Button Event
-    uploadButton.addEventListener('click', uploadFolder);
-
     // Add Image Button Event
     addImageButton.addEventListener('click', addNewImage);
+
+    // Delete Project Button Event
+    deleteProjectButton.addEventListener('click', deleteProject);
   </script>
 </body>
 
