@@ -387,8 +387,6 @@
         const copyIcon = Array.from(copyIcons).find(icon => icon.getAttribute('onclick')?.includes(`'${text}'`));
         if (copyIcon) {
           const rect = copyIcon.getBoundingClientRect();
-          tooltip.style.top = `${rect.top - 30 + window.scrollY}px`;
-          tooltip.style.left = `${rect.left + window.scrollX}px`;
           emId.appendChild(tooltip);
           setTimeout(() => tooltip.remove(), 2000);
         }
@@ -541,7 +539,7 @@
 
         projectNameBox.classList.remove('d-none');
         projectNameBox.classList.add('alert-success');
-        projectNameBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح! اسم المشروع الخاص بك: <strong id="projectId">${project}</strong><i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${project}', 'projectNameBox')"></i>. استخدم هذا الاسم لجلب الصور.`;
+        projectNameBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح! اسم المشروع الخاص بك: <strong id="projectId">${project}</strong><i id='copyico' class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${project}', 'copyico')"></i>. استخدم هذا الاسم لجلب الصور.`;
         logBox.classList.remove('alert-info');
         logBox.classList.add('alert-success');
         logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم رفع الصور بنجاح!`;
