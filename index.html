@@ -8,6 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
     body {
       font-family: 'Tajawal', sans-serif;
@@ -165,7 +166,6 @@
             accept="image/*">
           <div class="max mt-3" id="fileList"></div>
         </div>
-        <!-- Removed uploadButton since upload is now automatic -->
         <div class="progress mb-3" id="progressContainer" style="display: none;">
           <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%;" aria-valuenow="0"
             aria-valuemin="0" aria-valuemax="100"></div>
@@ -199,7 +199,6 @@
       </div>
     </div>
 
-    <!-- Confirmation Modal -->
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -207,9 +206,7 @@
             <h5 class="modal-title" id="confirmModalLabel">تأكيد العملية</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
           </div>
-          <div class="modal-body" id="confirmModalMessage">
-            <!-- Message will be set dynamically -->
-          </div>
+          <div class="modal-body" id="confirmModalMessage"></div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
             <button type="button" class="btn btn-danger" id="confirmModalButton">تأكيد</button>
@@ -224,17 +221,16 @@
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/umd/uuidv4.min.js"></script>
+  <script src="https://unpkg.com/cloudinary-core@latest/cloudinary-core-shrinkwrap.min.js"></script>
   <script>
     // Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBCRDvXJSZSOWfmd7jneq4lvsdT94oTG7c",
       authDomain: "sign-language-6273a.firebaseapp.com",
       projectId: "sign-language-6273a",
-      storageBucket: "sign-language-6273a.appspot.com",
       messagingSenderId: "504758894593",
       appId: "1:504758894593:web:76664a2f549484cd508000",
       measurementId: "G-3Q45BSCEXK"
@@ -249,8 +245,15 @@
       document.getElementById('logBox').classList.add('alert-danger');
       document.getElementById('logBox').innerHTML = `<i class="fas fa-times-circle"></i> خطأ في تهيئة Firebase: ${error.message}`;
     }
-    const storage = firebase.storage();
     const db = firebase.firestore();
+
+    // Cloudinary Configuration
+    const cloudinaryConfig = {
+      cloudName: 'dddxs9x6z',
+      uploadPreset: 'astimg',
+      apiKey: '531624823554936',
+      apiSecret: 'N5W6ymJE7dODNXz-YitWQNd76uQ' // تحذير: هذا غير آمن، يُفضل استخدام خادم
+    };
 
     // DOM Elements
     const folderUploadArea = document.getElementById('folderUploadArea');
@@ -305,7 +308,7 @@
       });
     }
 
-    // Drag and Drop
+    // Drag and Drop, updateFileList functions remain the same
     folderUploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
       folderUploadArea.style.borderColor = '#0d6efd';
@@ -335,14 +338,9 @@
       const files = folderUploadInput.files;
       fileList.innerHTML = '';
 
-      // Define valid image extensions
       const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp)$/i;
-
-      // Filter only image files in the root folder
       const imageFiles = Array.from(files).filter(file => {
-        // Check if file is an image
         const isImage = imageExtensions.test(file.name);
-        // Check if file is in the root folder (no subfolders)
         const isRootFile = file.webkitRelativePath.split('/').length === 2;
         return isImage && isRootFile;
       });
@@ -360,7 +358,7 @@
         }
         fileList.innerHTML += '</ul>';
         folderUploadArea.querySelector('.file-upload-text').textContent = 'تم اختيار المجلد بنجاح، جاري الرفع...';
-        uploadFolder(imageFiles); // Pass filtered image files to upload
+        uploadFolder(imageFiles);
       } else {
         fileList.innerHTML = '';
         folderUploadArea.querySelector('.file-upload-text').textContent = 'انقر لاختيار المجلد أو اسحب وأسقطه هنا';
@@ -428,7 +426,47 @@
       }
     }
 
-    // Load Images in Table
+    // Upload to Cloudinary
+    async function uploadToCloudinary(file, publicId = null) {
+      const timestamp = Math.floor(Date.now() / 1000); // Current time in seconds
+      const params = {
+        timestamp: timestamp,
+        upload_preset: cloudinaryConfig.uploadPreset
+      };
+      if (publicId) {
+        params.public_id = publicId;
+      }
+      const signature = generateSignature(params);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', cloudinaryConfig.uploadPreset);
+      formData.append('api_key', cloudinaryConfig.apiKey);
+      formData.append('timestamp', timestamp);
+      formData.append('signature', signature);
+      if (publicId) {
+        formData.append('public_id', publicId);
+      }
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.log('Cloudinary Error:', errorData); // Log error details
+        throw new Error(`فشل في رفع ${file.name} إلى Cloudinary: ${errorData.error?.message || 'خطأ غير معروف'}`);
+      }
+
+      const data = await response.json();
+      return {
+        url: data.secure_url,
+        publicId: data.public_id
+      };
+    }
+
+    // Load Images from Firestore
     async function loadImages(project) {
       if (!project) {
         logBox.classList.remove('d-none');
@@ -442,9 +480,8 @@
       imageTable.innerHTML = '';
       loader.style.display = 'block';
       try {
-        const listRef = storage.ref(`projects/${project}/`);
-        const list = await listRef.listAll();
-        if (list.items.length === 0) {
+        const snapshot = await db.collection('projects').doc(project).collection('images').get();
+        if (snapshot.empty) {
           logBox.classList.remove('d-none');
           logBox.classList.add('alert-info');
           logBox.innerHTML = '<i class="fas fa-info-circle"></i> لا توجد صور في هذا المشروع.';
@@ -452,24 +489,26 @@
           deleteProjectButton.style.display = 'none';
           return;
         }
-        for (const [index, item] of list.items.entries()) {
-          const originalUrl = await item.getDownloadURL();
-          const shortUrl = await getOrCreateShortUrl(project, item.name, originalUrl);
+        let index = 0;
+        for (const doc of snapshot.docs) {
+          const data = doc.data();
+          const shortUrl = await getOrCreateShortUrl(project, data.name, data.url);
           const row = document.createElement('tr');
           row.classList.add('row');
           row.innerHTML = `
-            <td class='col-3'><img src="${originalUrl}" alt="${item.name}" class="img-fluid"></td>
-            <td class='col-3'>${item.name}</td>
-            <td id='shortUrl-${index}' class='col-2'>
-              <a href="${shortUrl}" target="_blank">${shortUrl}</a>
-              <i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${shortUrl}', 'shortUrl-${index}')"></i>
-            </td>
-            <td class='col-4'>
-              <button class="btn btn-warning btn-sm me-2" onclick="editImage('${item.name}', '${project}')"><i class="fas fa-edit"></i> تعديل</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteImage('${item.name}', '${project}')"><i class="fas fa-trash"></i> حذف</button>
-            </td>
-          `;
+        <td class='col-3'><img src="${data.url}" alt="${data.name}" class="img-fluid"></td>
+        <td class='col-3'>${data.name}</td>
+        <td id='shortUrl-${index}' class='col-2'>
+          <a href="${shortUrl}" target="_blank">${shortUrl}</a>
+          <i class="fas fa-copy ms-2 copy-icon" onclick="copyToClipboard('${shortUrl}', 'shortUrl-${index}')"></i>
+        </td>
+        <td class='col-4'>
+          <button class="btn btn-warning btn-sm me-2" onclick="editImage('${data.name}', '${project}')"><i class="fas fa-edit"></i> تعديل</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteImage('${data.name}', '${project}')"><i class="fas fa-trash"></i> حذف</button>
+        </td>
+      `;
           imageTable.appendChild(row);
+          index++;
         }
         logBox.classList.remove('d-none');
         logBox.classList.add('alert-success');
@@ -490,7 +529,6 @@
 
     // Upload Folder
     async function uploadFolder(imageFiles) {
-      // If no image files are provided, use folderUploadInput.files (fallback for unchanged calls)
       const files = imageFiles || Array.from(folderUploadInput.files).filter(file => {
         const imageExtensions = /\.(jpg|jpeg|png|gif|bmp|webp)$/i;
         const isRootFile = file.webkitRelativePath.split('/').length === 2;
@@ -516,25 +554,12 @@
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const storagePath = `projects/${project}/${file.name}`;
-          const storageRef = storage.ref(storagePath);
-          const uploadTask = storageRef.put(file);
+          const progress = ((i + 1) / files.length) * 100;
+          progressBar.style.width = `${progress}%`;
+          logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع ${file.name} (${i + 1}/${files.length})`;
 
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              progressBar.style.width = `${progress}%`;
-              logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع ${file.name} (${i + 1}/${files.length})`;
-            },
-            (error) => {
-              throw new Error(`فشل في رفع ${file.name}: ${error.message}`);
-            }
-          );
-
-          await uploadTask;
-          const originalUrl = await storageRef.getDownloadURL();
-          await getOrCreateShortUrl(project, file.name, originalUrl);
+          const uploadResult = await uploadToCloudinary(file);
+          await saveImageToFirestore(project, file.name, uploadResult.url, uploadResult.publicId);
         }
 
         projectNameBox.classList.remove('d-none');
@@ -555,25 +580,13 @@
       }
     }
 
-    // Delete Image
-    async function deleteImage(imageName, project) {
-      const confirmed = await showConfirmModal(`هل أنت متأكد من حذف ${imageName}؟`);
-      if (!confirmed) return;
-
-      try {
-        const imageRef = storage.ref(`projects/${project}/${imageName}`);
-        await imageRef.delete();
-        const shortUrlDocRef = db.collection('shortUrls').doc(`${project}_${imageName}`);
-        await shortUrlDocRef.delete();
-        logBox.classList.remove('d-none');
-        logBox.classList.add('alert-success');
-        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم حذف ${imageName} بنجاح!`;
-        await loadImages(project);
-      } catch (error) {
-        logBox.classList.remove('d-none');
-        logBox.classList.add('alert-danger');
-        logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
-      }
+    // Generate Cloudinary Signature
+    function generateSignature(params) {
+      const stringToSign = Object.keys(params)
+        .sort()
+        .map(key => `${key}=${params[key]}`)
+        .join('&') + cloudinaryConfig.apiSecret;
+      return CryptoJS.SHA1(stringToSign).toString();
     }
 
     // Delete Project (All Images and Short URLs)
@@ -595,15 +608,40 @@
       logBox.innerHTML = '<i class="fas fa-trash-alt"></i> جاري حذف المشروع...';
 
       try {
-        const listRef = storage.ref(`projects/${currentProject}/`);
-        const list = await listRef.listAll();
-        const deleteImagePromises = list.items.map(async (item) => {
-          await item.delete();
+        const snapshot = await db.collection('projects').doc(currentProject).collection('images').get();
+        const deleteImagePromises = snapshot.docs.map(async (doc) => {
+          const publicId = doc.data().cloudinaryPublicId;
+          const timestamp = Math.floor(Date.now() / 1000);
+          const params = {
+            public_id: publicId,
+            timestamp: timestamp,
+            invalidate: true
+          };
+          const signature = generateSignature(params);
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/destroy`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              public_id: publicId,
+              api_key: cloudinaryConfig.apiKey,
+              timestamp: timestamp,
+              signature: signature,
+              invalidate: true
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || result.result !== 'ok') {
+            console.log(`Error deleting ${publicId}:`, result); // Log detailed error
+            throw new Error(`فشل في حذف ${doc.data().name} من Cloudinary: ${result.error?.message || 'خطأ غير معروف'}`);
+          }
+          await doc.ref.delete();
         });
         await Promise.all(deleteImagePromises);
 
-        const snapshot = await db.collection('shortUrls').where('project', '==', currentProject).get();
-        const deleteShortUrlPromises = snapshot.docs.map(async (doc) => {
+        const shortUrlSnapshot = await db.collection('shortUrls').where('project', '==', currentProject).get();
+        const deleteShortUrlPromises = shortUrlSnapshot.docs.map(async (doc) => {
           await doc.ref.delete();
         });
         await Promise.all(deleteShortUrlPromises);
@@ -625,6 +663,73 @@
       }
     }
 
+    // Delete Image from Cloudinary and Firestore
+    async function deleteImage(imageName, project) {
+      const confirmed = await showConfirmModal(`هل أنت متأكد من حذف ${imageName}؟`);
+      if (!confirmed) return;
+
+      loader.style.display = 'block';
+      logBox.classList.remove('d-none');
+      logBox.classList.remove('alert-danger');
+      logBox.classList.add('alert-info');
+      logBox.innerHTML = `<i class="fas fa-trash-alt"></i> جاري حذف ${imageName}...`;
+
+      try {
+        const docRef = db.collection('projects').doc(project).collection('images').doc(imageName);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+          throw new Error(`الصورة ${imageName} غير موجودة`);
+        }
+        const publicId = doc.data().cloudinaryPublicId;
+
+        // Generate timestamp and signature with all parameters
+        const timestamp = Math.floor(Date.now() / 1000);
+        const params = {
+          public_id: publicId,
+          timestamp: timestamp,
+          invalidate: true
+        };
+        const signature = generateSignature(params);
+
+        // Delete from Cloudinary
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/destroy`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            public_id: publicId,
+            api_key: cloudinaryConfig.apiKey,
+            timestamp: timestamp,
+            signature: signature,
+            invalidate: true
+          })
+        });
+
+        const result = await response.json();
+        if (!response.ok || result.result !== 'ok') {
+          console.log('Response from Cloudinary:', result); // لتسجيل التفاصيل للتحقق
+          throw new Error(`فشل في حذف ${imageName} من Cloudinary: ${result.error?.message || 'خطأ غير معروف'}`);
+        }
+
+        // Delete from Firestore only if Cloudinary deletion succeeds
+        await docRef.delete();
+        const shortUrlDocRef = db.collection('shortUrls').doc(`${project}_${imageName}`);
+        await shortUrlDocRef.delete();
+
+        logBox.classList.remove('alert-info');
+        logBox.classList.add('alert-success');
+        logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم حذف ${imageName} بنجاح!`;
+        await loadImages(project);
+      } catch (error) {
+        logBox.classList.remove('alert-info');
+        logBox.classList.add('alert-danger');
+        logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
     // Edit Image
     async function editImage(imageName, project) {
       const input = document.createElement('input');
@@ -633,36 +738,68 @@
       input.onchange = async (e) => {
         const newFile = e.target.files[0];
         if (newFile) {
+          loader.style.display = 'block';
+          logBox.classList.remove('d-none');
+          logBox.classList.remove('alert-danger');
+          logBox.classList.add('alert-info');
+          logBox.innerHTML = `<i class="fas fa-upload"></i> جاري معالجة الصورة ${imageName}...`;
+
           try {
-            const imageRef = storage.ref(`projects/${project}/${imageName}`);
-            await imageRef.delete();
-            const storageRef = storage.ref(`projects/${project}/${imageName}`);
-            const uploadTask = storageRef.put(newFile);
+            const docRef = db.collection('projects').doc(project).collection('images').doc(imageName);
+            const doc = await docRef.get();
+            if (!doc.exists) {
+              throw new Error(`الصورة ${imageName} غير موجودة`);
+            }
+            const oldPublicId = doc.data().cloudinaryPublicId;
 
-            uploadTask.on(
-              'state_changed',
-              (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                logBox.classList.remove('d-none');
-                logBox.classList.add('alert-info');
-                logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع الصورة الجديدة... (${progress.toFixed(2)}%)`;
+            // Delete old image from Cloudinary with invalidate
+            const timestamp = Math.floor(Date.now() / 1000);
+            const deleteParams = {
+              public_id: oldPublicId,
+              timestamp: timestamp,
+              invalidate: true
+            };
+            const deleteSignature = generateSignature(deleteParams);
+            const deleteResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/destroy`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
               },
-              (error) => {
-                throw new Error(`فشل في رفع الصورة الجديدة: ${error.message}`);
-              }
-            );
+              body: JSON.stringify({
+                public_id: oldPublicId,
+                api_key: cloudinaryConfig.apiKey,
+                timestamp: timestamp,
+                signature: deleteSignature,
+                invalidate: true
+              })
+            });
+            const deleteResult = await deleteResponse.json();
+            if (!deleteResponse.ok || deleteResult.result !== 'ok') {
+              throw new Error(`فشل في حذف الصورة القديمة ${imageName} من Cloudinary: ${deleteResult.error?.message || 'خطأ غير معروف'}`);
+            }
 
-            await uploadTask;
-            const originalUrl = await storageRef.getDownloadURL();
-            await getOrCreateShortUrl(project, imageName, originalUrl);
+            // Upload new image to Cloudinary with a new public_id based on new file name
+            const newBasePublicId = newFile.name.replace(/\.[^/.]+$/, ""); // Use new file name without extension
+            logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع الصورة الجديدة...`;
+            const uploadResult = await uploadToCloudinary(newFile, newBasePublicId);
+
+            // Update Firestore with new name, URL, and publicId
+            await docRef.delete(); // Delete old entry
+            await saveImageToFirestore(project, newFile.name, uploadResult.url, uploadResult.publicId);
+
+            // Update short URL with new name and URL
+            const shortUrl = await getOrCreateShortUrl(project, newFile.name, uploadResult.url);
+
             logBox.classList.remove('alert-info');
             logBox.classList.add('alert-success');
-            logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم تعديل ${imageName} بنجاح!`;
+            logBox.innerHTML = `<i class="fas fa-check-circle"></i> تم تعديل ${imageName} بنجاح! الاسم الجديد: ${newFile.name}`;
             await loadImages(project);
           } catch (error) {
             logBox.classList.remove('alert-info');
             logBox.classList.add('alert-danger');
             logBox.innerHTML = `<i class="fas fa-times-circle"></i> خطأ: ${error.message}`;
+          } finally {
+            loader.style.display = 'none';
           }
         }
       };
@@ -694,25 +831,12 @@
 
             for (let i = 0; i < files.length; i++) {
               const file = files[i];
-              const storagePath = `projects/${currentProject}/${file.name}`;
-              const storageRef = storage.ref(storagePath);
-              const uploadTask = storageRef.put(file);
+              const progress = ((i + 1) / files.length) * 100;
+              progressBar.style.width = `${progress}%`;
+              logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع ${file.name} (${i + 1}/${files.length})`;
 
-              uploadTask.on(
-                'state_changed',
-                (snapshot) => {
-                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                  progressBar.style.width = `${progress}%`;
-                  logBox.innerHTML = `<i class="fas fa-upload"></i> جاري رفع ${file.name} (${i + 1}/${files.length})`;
-                },
-                (error) => {
-                  throw new Error(`فشل في رفع ${file.name}: ${error.message}`);
-                }
-              );
-
-              await uploadTask;
-              const originalUrl = await storageRef.getDownloadURL();
-              await getOrCreateShortUrl(currentProject, file.name, originalUrl);
+              const uploadResult = await uploadToCloudinary(file);
+              await saveImageToFirestore(currentProject, file.name, uploadResult.url, uploadResult.publicId);
             }
 
             logBox.classList.remove('alert-info');
@@ -730,6 +854,20 @@
         }
       };
       input.click();
+    }
+
+    // Save Image to Firestore
+    async function saveImageToFirestore(project, imageName, url, publicId) {
+      try {
+        await db.collection('projects').doc(project).collection('images').doc(imageName).set({
+          name: imageName,
+          url: url,
+          cloudinaryPublicId: publicId,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        throw new Error(`فشل في حفظ ${imageName} في Firestore: ${error.message}`);
+      }
     }
 
     // Load Images Button Event
